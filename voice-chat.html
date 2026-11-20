@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Chat</title>
+<!--
+  Voice Chat: talk to a local speech model (e.g. Liquid AI's LFM3-Omni-2B) through llama.cpp.
+  One file, no internet, nothing to install. Start the model first:
+      llama serve -hf LiquidAI/LFM3-Omni-2B-GGUF:Q4_K_M --reasoning off --temp 0
+  then open this file in Edge or Chrome and allow the microphone.
+  It uses llama.cpp's realtime API (WebSocket /v1/realtime): your voice goes to the model
+  as you speak, and its spoken answer streams back. Everything stays on your computer.
+-->
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1d1d1f;--mute:#6b6b70;--line:#e3e0d8;--accent:#2E9E5B;--warn:#E85D5D;--you:#eef2f8;--ai:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e22;--ink:#f1f1f3;--mute:#a0a0a8;--line:#2e2e34;--you:#22303f;--ai:#1e1e22}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:18px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
+.app{max-width:980px;margin:0 auto;padding:22px 20px 28px;display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+h1{font-size:28px;margin:0;font-weight:650;letter-spacing:-.01em}
+.pill{font-size:15px;padding:5px 12px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--mute)}
+.pill.ok{color:var(--accent);border-color:var(--accent)}
+.pill.bad{color:var(--warn);border-color:var(--warn)}
+header .sp{flex:1}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 14px;cursor:pointer}
+.btn:hover{border-color:var(--mute)}
+#settings{display:none;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;gap:12px 18px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+#settings.open{display:grid}
+#settings label{display:flex;flex-direction:column;font-size:14px;color:var(--mute);gap:4px}
+#settings select,#settings input,#settings textarea{font-size:16px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+#settings .wide{grid-column:1/-1}
+#log{flex:1;overflow-y:auto;margin:18px 0 10px;display:flex;flex-direction:column;gap:12px;padding-right:4px}
+.msg{max-width:80%;padding:12px 16px;border-radius:16px;border:1px solid var(--line);font-size:20px;white-space:pre-wrap}
+.msg.you{align-self:flex-end;background:var(--you);border-bottom-right-radius:5px}
+.msg.ai{align-self:flex-start;background:var(--ai);border-bottom-left-radius:5px}
+.msg .meta{display:block;margin-top:6px;font-size:14px;color:var(--mute)}
+.msg .meta a{color:var(--mute)}
+.msg.err{align-self:center;color:var(--warn);font-size:16px;border-color:var(--warn)}
+.empty{margin:auto;text-align:center;color:var(--mute);font-size:19px;max-width:560px}
+.dock{display:flex;flex-direction:column;align-items:center;gap:10px}
+#talk{width:112px;height:112px;border-radius:50%;border:0;cursor:pointer;background:var(--ink);color:var(--bg);display:grid;place-items:center;position:relative;transition:background .2s}
+#talk svg{width:44px;height:44px}
+#talk.listening{background:var(--accent)}
+#talk.hearing{background:var(--accent);box-shadow:0 0 0 calc(6px + var(--lvl,0) * 26px) rgba(46,158,91,.25)}
+#talk.thinking{background:#8a8a92}
+#talk.speaking{background:#3b6fd4}
+#talk:disabled{opacity:.45;cursor:default}
+#state{font-size:19px;min-height:1.5em}
+.typebar{display:flex;gap:8px;width:100%;max-width:620px}
+.typebar input{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Voice Chat</h1>
+    <span id="conn" class="pill">Not connected</span>
+    <span class="sp"></span>
+    <button class="btn" id="newchat" title="Forget this conversation">New chat</button>
+    <button class="btn" id="gear" title="Settings">Settings</button>
+  </header>
+
+  <div id="settings">
+    <label>Server<input id="server" value="127.0.0.1:9931" spellcheck="false"></label>
+    <label>Voice<select id="voice"><option value="">Model default</option></select></label>
+    <label>Spoken language<select id="lang"></select></label>
+    <label>Answer with<select id="mode">
+      <option value="text,audio">Voice and text</option>
+      <option value="audio">Voice only</option>
+      <option value="text">Text only</option>
+    </select></label>
+    <label>Talking<select id="turns">
+      <option value="auto">Hands-free (sends when you pause)</option>
+      <option value="push">Click to start, click to send</option>
+    </select></label>
+    <label class="wide">Instructions for the model<textarea id="instr" rows="2">You are a helpful voice assistant. Answer the user's question in a short, natural way. Never repeat the question.</textarea></label>
+  </div>
+
+  <div id="log"><div class="empty" id="empty">Press the microphone and ask anything.<br>It answers out loud, right here on your computer.</div></div>
+
+  <div class="dock">
+    <button id="talk" aria-label="Talk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <div id="state">Press to start</div>
+    <form class="typebar" id="typebar"><input id="typed" placeholder="…or type a message" autocomplete="off"><button class="btn">Send</button></form>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const LANGS = [['en','English (American)'],['en-gb','English (British)'],['ar','Arabic'],['zh','Chinese'],['da','Danish'],
+  ['nl','Dutch'],['fi','Finnish'],['fr','French'],['de','German'],['el','Greek'],['he','Hebrew'],['it','Italian'],
+  ['ja','Japanese'],['ko','Korean'],['pl','Polish'],['pt','Portuguese'],['es','Spanish'],['sv','Swedish'],['tr','Turkish']];
+$('lang').add(new Option('Automatic', ''));
+for (const [v, n] of LANGS) $('lang').add(new Option(n, v));
+
+// settings survive a reload (per browser; nothing leaves this computer)
+const KEYS = ['server', 'voice', 'lang', 'mode', 'turns', 'instr'];
+try { const s = JSON.parse(localStorage.getItem('voicechat') || '{}'); for (const k of KEYS) if (s[k] != null && k !== 'voice') $(k).value = s[k]; } catch {}
+const params = new URLSearchParams(location.search);
+for (const k of KEYS) if (params.has(k)) $(k).value = params.get(k);
+function saveSettings() { try { const s = {}; for (const k of KEYS) s[k] = $(k).value; localStorage.setItem('voicechat', JSON.stringify(s)); } catch {} }
+
+let ws = null, sessionReady = false, outRate = 24000, model = '';
+let ctx = null, micStream = null, proc = null;
+let phase = 'idle';           // idle | listening | hearing | thinking | speaking
+let preroll = [], sentSamples = 0, turnStart = 0, quietMs = 0, loudMs = 0, floor = 0.004;
+let playEnd = 0, sources = [], reply = null, sendT = 0, speechEnd = 0, lastLoud = 0;
+
+function setPhase(p, text) {
+  phase = p;
+  $('talk').className = p;
+  $('state').textContent = text;
+}
+function setConn(cls, text) { const c = $('conn'); c.className = 'pill ' + cls; c.textContent = text; }
+function addMsg(cls, text) {
+  $('empty')?.remove();
+  const d = document.createElement('div'); d.className = 'msg ' + cls;
+  d.append(document.createTextNode(text)); $('log').append(d); d.scrollIntoView({ block: 'end' });
+  return d;
+}
+function meta(el, html) { let m = el.querySelector('.meta'); if (!m) { m = document.createElement('span'); m.className = 'meta'; el.append(m); } m.innerHTML = html; el.scrollIntoView({ block: 'end' }); }
+const b64 = buf => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = s => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+function f32ToPcm16(f) { const o = new Int16Array(f.length); for (let i = 0; i < f.length; i++) { const v = Math.max(-1, Math.min(1, f[i])); o[i] = v < 0 ? v * 32768 : v * 32767; } return o.buffer; }
+function wavBlob(int16s, rate) {
+  const n = int16s.reduce((a, b) => a + b.length, 0), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, n * 2, true); let o = 44; for (const a of int16s) for (let i = 0; i < a.length; i++, o += 2) v.setInt16(o, a[i], true);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// ---------------------------------------------------------------- server
+function base() { let s = $('server').value.trim().replace(/^(https?|wss?):\/\//, '').replace(/\/.*$/, ''); return s || "127.0.0.1:9931"; }
+
+async function connect() {
+  if (ws && ws.readyState <= 1) return true;
+  sessionReady = false;
+  setConn('', 'Connecting…');
+  let props = null;
+  try { props = await (await fetch('http://' + base() + '/props')).json(); } catch {}
+  if (props) {
+    model = (props.model_alias || props.model_path || '').split(/[\\/]/).pop().replace(/\.gguf$/i, '');
+    // LFM3 models speak with a female or a male voice; other speech models list their own voices
+    const voices = (props.voices && props.voices.length) ? props.voices : ['female', 'male'], sel = $('voice'), keep = sel.value || (JSON.parse(localStorage.getItem('voicechat') || '{}').voice || '');
+    sel.length = 1; for (const v of voices) sel.add(new Option(v[0].toUpperCase() + v.slice(1), v));
+    if (voices.includes(keep)) sel.value = keep;
+  }
+  return new Promise(res => {
+    try { ws = new WebSocket('ws://' + base() + '/v1/realtime'); } catch (e) { setConn('bad', 'Wrong server address'); return res(false); }
+    let settled = false;
+    const done = ok => { if (!settled) { settled = true; res(ok); } };
+    ws.onmessage = e => { const ev = JSON.parse(e.data); onEvent(ev); if (ev.type === 'session.updated') done(true); if (ev.type === 'error' && !sessionReady) done(false); };
+    ws.onerror = () => { setConn('bad', 'Can\'t reach ' + base() + ' — is the model running?'); done(false); };
+    ws.onclose = () => { sessionReady = false; if (settled) setConn('bad', 'Disconnected'); stopAudio(); if (phase !== 'idle') setPhase('idle', 'Press to start'); done(false); };
+  });
+}
+
+function configure() {
+  const out = {};
+  if ($('voice').value) out.voice = $('voice').value;
+  if ($('lang').value) out.language = $('lang').value;
+  const ev = { type: 'session.update', session: {
+    instructions: $('instr').value.trim(),
+    output_modalities: $('mode').value.split(','),
+    audio: { input: { format: { type: 'audio/pcm', rate: ctx ? ctx.sampleRate : 16000 } }, output: out } } };
+  if (!ev.session.instructions) delete ev.session.instructions;
+  ws.send(JSON.stringify(ev));
+}
+
+function onEvent(ev) {
+  switch (ev.type) {
+    case 'session.created':
+      outRate = ev.session?.audio?.output?.format?.rate || 24000;
+      model = model || ev.session?.model || '';
+      configure();
+      break;
+    case 'session.updated':
+      sessionReady = true;
+      setConn('ok', 'Connected' + (model ? ' · ' + model : ''));
+      break;
+    case 'response.created':
+      reply = { el: null, text: '', pcm: [], samples: 0, first: 0 };
+      need = PREBUFFER;
+      break;
+    case 'response.output_text.delta':
+      if (!reply.el) reply.el = addMsg('ai', '');
+      reply.text += ev.delta;
+      reply.el.firstChild.textContent = reply.text.replace(/^\s+/, '');
+      reply.el.scrollIntoView({ block: 'end' });
+      break;
+    case 'response.output_audio.delta': {
+      const pcm = new Int16Array(unb64(ev.delta));
+      if (!reply.first) reply.first = performance.now();
+      reply.pcm.push(pcm); reply.samples += pcm.length;
+      play(pcm, false, reply);
+      if (!reply.el) { reply.el = addMsg('ai', ''); reply.el.firstChild.textContent = '🔊'; }
+      break;
+    }
+    case 'response.done': {
+      if (!reply) break;
+      const r = reply; reply = null;
+      if (queue.length) play(null, true, r);
+      if (!r.el) r.el = addMsg('ai', r.text || '(no answer)');
+      const bits = [];
+      // the wait you hear: from the end of your question to the first word of the answer
+      if (r.heard) bits.push('answer began ' + Math.max(0, (r.heard - speechEnd) / 1000).toFixed(1) + ' s after you stopped');
+      if (r.samples) {
+        bits.push((r.samples / outRate).toFixed(1) + ' s of speech');
+        const url = URL.createObjectURL(wavBlob(r.pcm, outRate));
+        bits.push(`<a href="${url}" download="answer-${Date.now()}.wav">save</a>`);
+      }
+      meta(r.el, bits.join(' · '));
+      afterReply();
+      break;
+    }
+    case 'error':
+      addMsg('err', ev.error?.message || 'error');
+      if (phase === 'thinking') afterReply();
+      break;
+  }
+}
+
+// ---------------------------------------------------------------- playback
+// A small computer makes speech at about the speed it is spoken, so a little is collected
+// before playing (and again if it ever runs dry): no stutter.
+const PREBUFFER = 0.6, REBUFFER = 0.6;
+let queue = [], queued = 0, need = PREBUFFER;
+function play(pcm, flush, rep) {
+  if (pcm) {
+    const f = new Float32Array(pcm.length); for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+    queue.push(f); queued += f.length / outRate;
+  }
+  const dry = playEnd < ctx.currentTime + 0.02;
+  if (dry && queued < need && !flush) return;       // still buffering
+  if (dry) need = REBUFFER;
+  let t = Math.max(ctx.currentTime + 0.05, playEnd);
+  // when the first sample reaches the speaker: the scheduled start plus the sound card's own delay
+  if (rep && !rep.heard && queue.length) rep.heard = performance.now() + (t - ctx.currentTime + (ctx.outputLatency || ctx.baseLatency || 0)) * 1000;
+  for (const f of queue) {
+    const b = ctx.createBuffer(1, f.length, outRate); b.copyToChannel(f, 0);
+    const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination);
+    s.start(t); t += b.duration; sources.push(s);
+    s.onended = () => { sources = sources.filter(x => x !== s); };
+  }
+  playEnd = t; queue = []; queued = 0;
+  if (phase !== 'speaking') setPhase('speaking', 'Speaking… (press to stop)');
+}
+function stopAudio() { for (const s of sources) try { s.stop(); } catch {} sources = []; playEnd = 0; queue = []; queued = 0; need = PREBUFFER; }
+function afterReply() {
+  // back to listening once the last word has played
+  const wait = Math.max(0, (playEnd - (ctx ? ctx.currentTime : 0)) * 1000) + 250;
+  setTimeout(() => {
+    if (reply) return;
+    if (phase === 'thinking' || phase === 'speaking') {
+      if ($('turns').value === 'auto' && micStream) setPhase('listening', 'Listening…');
+      else setPhase('idle', 'Press to talk');
+    }
+  }, wait);
+}
+
+// ---------------------------------------------------------------- microphone
+async function startMic() {
+  if (!ctx) ctx = new AudioContext();
+  if (ctx.state === 'suspended') await ctx.resume();
+  if (!micStream) {
+    const fx = params.get('raw') !== '1';
+    try { micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: fx, noiseSuppression: fx, autoGainControl: fx, channelCount: 1 } }); }
+    catch (e) { addMsg('err', 'No microphone: ' + e.message); return false; }
+    const src = ctx.createMediaStreamSource(micStream);
+    proc = ctx.createScriptProcessor(2048, 1, 1);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    proc.onaudioprocess = e => onMic(e.inputBuffer.getChannelData(0));
+  }
+  return true;
+}
+
+function onMic(buf) {
+  if (phase !== 'listening' && phase !== 'hearing') return;
+  let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length), ms = buf.length / ctx.sampleRate * 1000;
+  const chunk = new Float32Array(buf);
+  if (phase === 'hearing') $('talk').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
+  if ($('turns').value === 'push') {
+    if (phase === 'listening') { setPhase('hearing', 'Listening… press to send'); turnStart = performance.now(); }
+    send(chunk); return;
+  }
+  // hands-free: speech starts above the noise floor, the turn ends after 0.8 s of quiet
+  const thr = Math.max(0.012, floor * 3.5);
+  if (phase === 'listening') {
+    floor = floor * 0.97 + Math.min(rms, 0.05) * 0.03;
+    preroll.push(chunk); while (preroll.length > 8) preroll.shift();
+    loudMs = rms > thr ? loudMs + ms : 0;
+    if (loudMs >= 120) { setPhase('hearing', 'Listening…'); turnStart = lastLoud = performance.now(); quietMs = 0; for (const c of preroll) send(c); preroll = []; }
+    return;
+  }
+  send(chunk);
+  if (rms > thr * 0.7) { quietMs = 0; lastLoud = performance.now(); } else quietMs += ms;
+  if (quietMs >= 800) endTurn();
+}
+
+function send(f32) {
+  if (!ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: b64(f32ToPcm16(f32)) }));
+  sentSamples += f32.length;
+}
+
+function endTurn() {
+  if (!sentSamples) { setPhase('listening', 'Listening…'); return; }
+  const secs = sentSamples / ctx.sampleRate; sentSamples = 0;
+  addMsg('you', '🎤 ' + secs.toFixed(1) + ' s');
+  ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+  ws.send(JSON.stringify({ type: 'response.create' }));
+  sendT = performance.now();
+  speechEnd = $('turns').value === 'auto' && lastLoud ? lastLoud : sendT;
+  $('talk').style.removeProperty('--lvl');
+  setPhase('thinking', 'Thinking…');
+}
+
+// ---------------------------------------------------------------- controls
+$('talk').onclick = async () => {
+  if (phase === 'speaking' || phase === 'thinking') {          // interrupt
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'response.cancel' }));
+    stopAudio(); reply = null;
+    setPhase($('turns').value === 'auto' ? 'listening' : 'idle', $('turns').value === 'auto' ? 'Listening…' : 'Press to talk');
+    return;
+  }
+  if (phase === 'hearing') { endTurn(); return; }
+  if (phase === 'listening') { setPhase('idle', 'Paused · press to talk'); sentSamples = 0; preroll = []; return; }
+  $('talk').disabled = true;
+  if (!(await startMic())) { $('talk').disabled = false; return; }
+  const ok = await connect();
+  $('talk').disabled = false;
+  if (!ok) return;
+  setPhase('listening', $('turns').value === 'auto' ? 'Listening…' : 'Listening… press to send');
+};
+
+$('typebar').onsubmit = async e => {
+  e.preventDefault();
+  const text = $('typed').value.trim(); if (!text) return;
+  if (!ctx) ctx = new AudioContext();
+  if (ctx.state === 'suspended') await ctx.resume();
+  if (!(await connect())) return;
+  if (phase === 'speaking' || phase === 'thinking') { ws.send(JSON.stringify({ type: 'response.cancel' })); stopAudio(); }
+  $('typed').value = '';
+  addMsg('you', text);
+  ws.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } }));
+  ws.send(JSON.stringify({ type: 'response.create' }));
+  sendT = speechEnd = performance.now();
+  setPhase('thinking', 'Thinking…');
+};
+
+$('gear').onclick = () => $('settings').classList.toggle('open');
+// end the conversation quietly (no "Disconnected" warning): the next press of the microphone starts a new one
+function resetChat(connText) {
+  if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
+  ws = null; sessionReady = false; stopAudio(); reply = null; sentSamples = 0; preroll = [];
+  setPhase('idle', 'Press to start'); setConn('', connText);
+}
+const EMPTY = $('log').innerHTML;
+$('newchat').onclick = () => { resetChat('Not connected'); $('log').innerHTML = EMPTY; };
+for (const k of KEYS) $(k).addEventListener('change', () => {
+  saveSettings();
+  // voice, language and instructions are fixed for a conversation: a change starts a new one
+  if (ws && ['voice', 'lang', 'instr', 'server'].includes(k)) resetChat('New settings · press the microphone');
+  else if (ws && ws.readyState === 1 && k === 'mode') configure();
+});
+setPhase('idle', 'Press to start');
+</script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Chat for LFM3-Omni</title>
+<meta name="description" content="A free one-file page to talk to LFM3-Omni-2B out loud on your own PC with llama.cpp. No graphics card needed.">
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1d1d1f;--mute:#5f5f66;--line:#e3e0d8;--accent:#2E9E5B;--code:#f0ede6}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e22;--ink:#f1f1f3;--mute:#a6a6ae;--line:#2e2e34;--code:#26262b}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.55 "Segoe UI",system-ui,-apple-system,sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 16px 56px}
+.eyebrow{font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:0 0 8px}
+h1{font-size:34px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.01em}
+.lead{font-size:20px;margin:0 0 26px;color:var(--ink)}
+.dl{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;
+  padding:14px 22px;border-radius:12px;font-size:19px}
+.dl:hover{filter:brightness(1.07)}
+.dl svg{width:20px;height:20px}
+.small{font-size:15px;color:var(--mute);margin:10px 0 0}
+section{margin-top:40px}
+h2{font-size:22px;margin:0 0 14px}
+ol{padding-left:0;list-style:none;counter-reset:s;margin:0}
+ol li{counter-increment:s;position:relative;padding:16px 18px 16px 58px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;margin-bottom:12px}
+ol li::before{content:counter(s);position:absolute;left:18px;top:15px;width:28px;height:28px;border-radius:50%;
+  background:var(--ink);color:var(--bg);font-size:15px;font-weight:700;display:grid;place-items:center}
+.cmd{display:flex;align-items:stretch;gap:8px;margin-top:10px}
+code{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:15px}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;background:var(--code);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px}
+.copy{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:0 14px;font:inherit;
+  font-size:15px;cursor:pointer}
+.copy:hover{border-color:var(--mute)}
+ul{margin:0;padding-left:22px}
+ul li{margin-bottom:8px}
+a{color:var(--accent)}
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:15px;color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Genxt Tutorials · free tool</p>
+  <h1>Voice Chat for LFM3-Omni</h1>
+  <p class="lead">Talk to LFM3-Omni-2B, a free AI from Liquid AI, and hear it answer out loud, on your own PC. No graphics
+    card needed. It's one HTML file that only talks to the model on your own computer.</p>
+  <a class="dl" href="voice-chat.html" download="voice-chat.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+    Download voice-chat.html
+  </a>
+  <p class="small">21 KB. Works in Microsoft Edge or Google Chrome on Windows.</p>
+
+  <section>
+    <h2>How to use it on Windows</h2>
+    <ol>
+      <li>Right-click <b>Start</b>, open <b>Terminal</b>, and install llama.cpp:
+        <div class="cmd"><code>winget install llama.cpp</code><button class="copy" type="button">Copy</button></div>
+      </li>
+      <li>Open a new Terminal and start the model. The first time, it downloads about 1.4 GB. When it says
+        <b>listening</b>, it's ready. Keep this window open.
+        <div class="cmd"><code>llama serve -hf LiquidAI/LFM3-Omni-2B-GGUF:Q4_K_M --reasoning off --temp 0</code><button class="copy" type="button">Copy</button></div>
+      </li>
+      <li>Open the downloaded <b>voice-chat.html</b>, press the microphone, allow it, and just talk.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Good to know</h2>
+    <ul>
+      <li>It sends your turn after you stop talking for a moment, and the answer started about two seconds later on our test PC (no graphics card).</li>
+      <li><b>Settings</b> on the page: a female or male voice, the instructions the AI follows, and the server address
+        (llama.cpp's default is 127.0.0.1:9931).</li>
+      <li>You can also type a message, and save any spoken answer as a WAV file.</li>
+      <li>The model speaks 18 languages. Indian languages such as Hindi are not among them.</li>
+      <li>For photos and videos, use llama.cpp's own chat page at <code>http://127.0.0.1:9931</code>. It answers in text.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Made by <a href="https://www.youtube.com/channel/UCGYVRVSDHwDcGy-i12Iwiaw">Genxt Tutorials</a> on YouTube. Free to use
+    (MIT licence). Not made by or affiliated with Liquid AI or llama.cpp.
+  </footer>
+</main>
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = b.previousElementSibling.textContent;
+    var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () {}); else done();
+  });
+});
+</script>
+</body>
+</html>
