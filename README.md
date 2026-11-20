@@ -4,7 +4,7 @@ A free, one-file web page for talking to **LFM3-Omni-2B** (Liquid AI) out loud, 
 PC. No graphics card needed. The page talks only to the model on your own computer
 (`ws://127.0.0.1:9931/v1/realtime`, llama.cpp's realtime API).
 
-**Download:** https://genxt-tutorials.github.io/voice-chat/
+**Download:** https://genxt-tutorials.github.io/voice-chat/ · **Video:** https://youtu.be/STBPdVs_muE
 
 ## How to use it on Windows
 
