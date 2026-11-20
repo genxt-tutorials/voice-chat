@@ -7,6 +7,7 @@
 <meta name="description" content="A free one-file page to talk to LFM3-Omni-2B out loud on your own PC with llama.cpp. No graphics card needed.">
 <style>
 :root{--bg:#f6f4ef;--card:#fff;--ink:#1d1d1f;--mute:#5f5f66;--line:#e3e0d8;--accent:#2E9E5B;--code:#f0ede6}
+@media (max-width:480px){.cmd{flex-direction:column;align-items:stretch}.cmd code{font-size:14px}.copy{padding:8px 14px;align-self:flex-start}ol li{padding:14px 14px 14px 50px}ol li::before{left:12px;top:13px}h1{font-size:29px}.lead{font-size:18px}}
 @media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1e1e22;--ink:#f1f1f3;--mute:#a6a6ae;--line:#2e2e34;--code:#26262b}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.55 "Segoe UI",system-ui,-apple-system,sans-serif}
@@ -22,17 +23,19 @@ h1{font-size:34px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacin
 section{margin-top:40px}
 h2{font-size:22px;margin:0 0 14px}
 ol{padding-left:0;list-style:none;counter-reset:s;margin:0}
-ol li{counter-increment:s;position:relative;padding:16px 18px 16px 58px;background:var(--card);border:1px solid var(--line);
+ol li{counter-increment:s;position:relative;min-width:0;padding:16px 18px 16px 58px;background:var(--card);border:1px solid var(--line);
   border-radius:14px;margin-bottom:12px}
 ol li::before{content:counter(s);position:absolute;left:18px;top:15px;width:28px;height:28px;border-radius:50%;
   background:var(--ink);color:var(--bg);font-size:15px;font-weight:700;display:grid;place-items:center}
 .cmd{display:flex;align-items:stretch;gap:8px;margin-top:10px}
 code{font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:15px}
-.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;background:var(--code);border:1px solid var(--line);
-  border-radius:8px;padding:9px 12px}
+.cmd code{flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;background:var(--code);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;line-height:1.5}
 .copy{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:0 14px;font:inherit;
   font-size:15px;cursor:pointer}
 .copy:hover{border-color:var(--mute)}
+.w{white-space:nowrap}
+h1 .w{white-space:nowrap}
 ul{margin:0;padding-left:22px}
 ul li{margin-bottom:8px}
 a{color:var(--accent)}
@@ -42,7 +45,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-si
 <body>
 <main>
   <p class="eyebrow">Genxt Tutorials · free tool</p>
-  <h1>Voice Chat for LFM3-Omni</h1>
+  <h1>Voice Chat for <span class="w">LFM3-Omni</span></h1>
   <p class="lead">Talk to LFM3-Omni-2B, a free AI from Liquid AI, and hear it answer out loud, on your own PC. No graphics
     card needed. It's one HTML file that only talks to the model on your own computer.</p>
   <a class="dl" href="voice-chat.html" download="voice-chat.html">
@@ -55,13 +58,13 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-si
     <h2>How to use it on Windows</h2>
     <ol>
       <li>Right-click <b>Start</b>, open <b>Terminal</b>, and install llama.cpp:
-        <div class="cmd"><code>winget install llama.cpp</code><button class="copy" type="button">Copy</button></div>
+        <div class="cmd"><code><span class="w">winget</span> <span class="w">install</span> <span class="w">llama.cpp</span></code><button class="copy" type="button">Copy</button></div>
       </li>
-      <li>Open a new Terminal and start the model. The first time, it downloads about 1.4 GB. When it says
+      <li>Open a new Terminal and start the model. The first time, it downloads about 1.4&nbsp;GB. When it says
         <b>listening</b>, it's ready. Keep this window open.
-        <div class="cmd"><code>llama serve -hf LiquidAI/LFM3-Omni-2B-GGUF:Q4_K_M --reasoning off --temp 0</code><button class="copy" type="button">Copy</button></div>
+        <div class="cmd"><code><span class="w">llama</span> <span class="w">serve</span> <span class="w">-hf</span> <span class="w">LiquidAI/LFM3-Omni-2B-GGUF:Q4_K_M</span> <span class="w">--reasoning</span> <span class="w">off</span> <span class="w">--temp</span> <span class="w">0</span></code><button class="copy" type="button">Copy</button></div>
       </li>
-      <li>Open the downloaded <b>voice-chat.html</b>, press the microphone, allow it, and just talk.</li>
+      <li>Open the downloaded <b>voice-chat.html</b>, press the microphone, allow it, and just&nbsp;talk.</li>
     </ol>
   </section>
 
